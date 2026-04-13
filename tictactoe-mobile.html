@@ -1,285 +1,241 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>井字棋</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #050e08;
-    color: #d0e8d0;
-    font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-    overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none;
-  }
-  .top-bar {
-    width: 100%; max-width: 420px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px;
-    background: rgba(0,0,0,0.4);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-  }
-  .back-btn { font-size: 1.4rem; background: none; border: none; color: #6a7a6a; cursor: pointer; text-decoration: none; padding: 4px 10px; }
-  .top-title { font-size: 0.85rem; font-weight: 700; color: #b0c8b0; letter-spacing: 1px; }
-  .top-right { display: flex; align-items: center; gap: 8px; }
-  .mode-badge { font-size: 0.62rem; padding: 3px 10px; border-radius: 20px; font-weight: 600; letter-spacing: 1px; background: rgba(52,211,153,0.12); color: #34d399; border: 1px solid rgba(52,211,153,0.25); }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>井字棋 · Tic Tac Toe</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: rgba(0,0,0,0.2);
+    }
+    .back-btn { color: #fff; text-decoration: none; font-size: 1.4rem; }
+    .top-title { font-size: 1.1rem; font-weight: 600; }
+    .status { font-size: 0.95rem; color: #a5b4fc; }
 
-  .score-row {
-    display: flex; justify-content: space-around; align-items: center;
-    padding: 8px 16px; flex-shrink: 0;
-    background: rgba(0,0,0,0.2);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    width: 100%; max-width: 420px;
-    gap: 8px;
-  }
-  .score-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .score-label { font-size: 0.55rem; color: #3a4a3a; letter-spacing: 2px; text-transform: uppercase; }
-  .score-val { font-size: 1.1rem; font-weight: 900; color: #34d399; }
-  .score-val.ai { color: #f87171; }
+    .game-area {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%; max-width: 320px;
+      aspect-ratio: 1;
+    }
+    .cell {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 3rem;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .cell:active { background: rgba(255,255,255,0.15); }
+    .cell.x { color: #60a5fa; }
+    .cell.o { color: #f472b6; }
+    .cell.winner { background: rgba(74,222,128,0.2); }
+    .cell.tie { background: rgba(251,191,36,0.15); }
 
-  .status {
-    font-size: 0.82rem; color: #5a8a5a; text-align: center; padding: 10px 14px;
-    min-height: 38px; display: flex; align-items: center; justify-content: center;
-    width: 100%; max-width: 420px; flex-shrink: 0;
-  }
-  .status.win { color: #fbbf24; font-weight: 700; animation: glow 0.8s ease infinite alternate; }
-  .status.lose { color: #f87171; }
-  .status.draw { color: #94a3b8; }
-  @keyframes glow { from{text-shadow:0 0 6px rgba(251,191,36,0.4)} to{text-shadow:0 0 18px rgba(251,191,36,0.9)} }
-
-  .mode-tabs {
-    display: flex; gap: 8px; padding: 0 16px 10px;
-    width: 100%; max-width: 420px; justify-content: center; flex-shrink: 0;
-  }
-  .mode-tab {
-    flex: 1; padding: 9px 8px;
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; font-size: 0.68rem; letter-spacing: 0.5px;
-    color: #3a5a3a; cursor: pointer; text-align: center;
-    font-family: inherit; transition: all 0.2s;
-  }
-  .mode-tab.on { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.3); color: #34d399; }
-  .mode-tab:active { transform: scale(0.97); }
-
-  #board {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    padding: 16px;
-    width: min(88vw, 340px);
-    touch-action: manipulation; flex-shrink: 0;
-  }
-  .cell {
-    aspect-ratio: 1;
-    background: rgba(255,255,255,0.04);
-    border: 2px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: clamp(2.8rem, 14vw, 4rem);
-    cursor: pointer; user-select: none;
-    transition: transform 0.1s;
-  }
-  .cell:active:not(.taken):not(.disabled) { transform: scale(0.94); }
-  .cell.taken { cursor: default; }
-  .cell.disabled { cursor: default; }
-  .cell.highlight-win { background: rgba(251,191,36,0.18); border-color: rgba(251,191,36,0.5); }
-
-  .controls { padding: 6px 16px 20px; width: 100%; max-width: 420px; }
-  .btn-row { display: flex; gap: 10px; }
-  .btn {
-    flex: 1; padding: 12px;
-    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-    color: #5a7a5a; font-size: 0.72rem; letter-spacing: 0.5px;
-    cursor: pointer; border-radius: 12px; text-align: center;
-    font-family: inherit; transition: all 0.15s;
-  }
-  .btn:active { background: rgba(255,255,255,0.12); transform: scale(0.97); }
-  .btn-primary { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.25); color: #34d399; }
-</style>
+    .controls {
+      display: flex; gap: 12px; padding: 16px;
+      background: rgba(0,0,0,0.15);
+    }
+    .btn {
+      flex: 1; padding: 14px; border: none; border-radius: 10px;
+      font-size: 1rem; cursor: pointer;
+      background: rgba(255,255,255,0.1); color: #fff;
+    }
+    .btn:active { transform: scale(0.97); }
+  </style>
 </head>
 <body>
 
 <div class="top-bar">
   <a href="index.html" class="back-btn">←</a>
   <div class="top-title">井字棋 · Tic Tac Toe</div>
-  <div class="top-right">
-    <div class="mode-badge" id="modeBadge">人机</div>
-  </div>
+  <div class="status" id="status">你的回合 (X)</div>
 </div>
 
-<div class="score-row">
-  <div class="score-item"><div class="score-label">你</div><div class="score-val" id="sW">0</div></div>
-  <div class="score-item"><div class="score-label">平局</div><div class="score-val" id="sD">0</div></div>
-  <div class="score-item"><div class="score-label">AI</div><div class="score-val ai" id="sL">0</div></div>
-</div>
-
-<div class="status" id="statusEl">你的回合</div>
-
-<div class="mode-tabs">
-  <div class="mode-tab on" id="tabAI" onclick="setMode('ai')">🤖 人机对战</div>
-  <div class="mode-tab" id="tab2P" onclick="setMode('2p')">👥 双人游戏</div>
-</div>
-
-<div id="board">
-  <div class="cell" data-i="0"></div><div class="cell" data-i="1"></div><div class="cell" data-i="2"></div>
-  <div class="cell" data-i="3"></div><div class="cell" data-i="4"></div><div class="cell" data-i="5"></div>
-  <div class="cell" data-i="6"></div><div class="cell" data-i="7"></div><div class="cell" data-i="8"></div>
+<div class="game-area">
+  <div class="board" id="board"></div>
 </div>
 
 <div class="controls">
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="reset()">新游戏</button>
-    <button class="btn" onclick="resetAll()">重置分数</button>
-  </div>
+  <button class="btn" onclick="undo()">↩ 悔棋</button>
+  <button class="btn" onclick="newGame()">🆕 新游戏</button>
 </div>
 
 <script>
-const X = 'X', O = 'O';
-const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-
-let board = Array(9).fill(null);
-let turn = X;
+const SIZE = 3;
+let board = [];
+let history = [];
+let currentPlayer = 'X'; // X=玩家, O=AI
 let gameOver = false;
-let mode = 'ai';
-let scores = { w: 0, d: 0, l: 0 };
+let winner = null;
 
-// Cells are static in the DOM, collect once
-const cells = Array.from(document.querySelectorAll('.cell'));
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
 
 function init() {
-  cells.forEach((el, i) => {
-    el.addEventListener('click', () => onCell(i));
-  });
-  renderBoard();
+  board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+  history = [];
+  currentPlayer = 'X';
+  gameOver = false;
+  winner = null;
+  render();
 }
 
-function setMode(m) {
-  mode = m;
-  document.getElementById('tabAI').className = 'mode-tab' + (m === 'ai' ? ' on' : '');
-  document.getElementById('tab2P').className = 'mode-tab' + (m === '2p' ? ' on' : '');
-  document.getElementById('modeBadge').textContent = m === 'ai' ? '人机' : '双人';
-  reset();
-}
-
-function onCell(i) {
-  if (gameOver || board[i]) return;
-  if (mode === 'ai' && turn === O) return;
-
-  place(i, turn);
-  const w = checkWin(turn);
-  if (w) { endGame(turn === X ? 'win' : 'lose'); return; }
-  if (board.every(Boolean)) { endGame('draw'); return; }
-  turn = turn === X ? O : X;
-  setStatus(mode === 'ai' && turn === O ? 'AI 思考中...' : (turn === X ? "X 的回合" : "O 的回合"), '');
-
-  if (mode === 'ai' && turn === O && !gameOver) {
-    setTimeout(aiMove, 350);
-  }
-}
-
-function place(i, player) {
-  board[i] = player;
-  updateCell(i);
-}
-
-function updateCell(i) {
-  const el = cells[i];
-  el.textContent = board[i] || '';
-  el.className = 'cell' + (board[i] ? ' taken' : '') + (gameOver ? ' disabled' : '');
-}
-
-function checkWin(p) {
-  for (const [a, b, c] of WINS) {
-    if (board[a] === p && board[b] === p && board[c] === p) {
-      [a, b, c].forEach(i => cells[i].classList.add('highlight-win'));
-      return true;
+function render() {
+  boardEl.innerHTML = '';
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if (board[r][c]) {
+        cell.classList.add(board[r][c].toLowerCase());
+        cell.textContent = board[r][c];
+      }
+      if (winner && isWinnerCell(r, c)) {
+        cell.classList.add('winner');
+      }
+      if (!winner && history.length === SIZE * SIZE) {
+        cell.classList.add('tie');
+      }
+      cell.onclick = () => onClick(r, c);
+      boardEl.appendChild(cell);
     }
   }
+  updateStatus();
+}
+
+function onClick(r, c) {
+  if (gameOver || board[r][c]) return;
+  
+  board[r][c] = currentPlayer;
+  history.push({ r, c, player: currentPlayer });
+  
+  if (checkWin(currentPlayer)) {
+    gameOver = true;
+    winner = currentPlayer;
+    render();
+    return;
+  }
+  
+  if (history.length === SIZE * SIZE) {
+    gameOver = true;
+    render();
+    return;
+  }
+  
+  currentPlayer = 'O';
+  render();
+  
+  if (!gameOver) {
+    setTimeout(aiMove, 400);
+  }
+}
+
+function updateStatus() {
+  if (winner) {
+    statusEl.textContent = winner === 'X' ? '🎉 你赢了！' : '💀 AI赢了';
+    statusEl.style.color = winner === 'X' ? '#4ade80' : '#f87171';
+  } else if (gameOver) {
+    statusEl.textContent = '🤝 平局！';
+    statusEl.style.color = '#fbbf24';
+  } else {
+    statusEl.textContent = currentPlayer === 'X' ? '你的回合 (X)' : 'AI思考中... (O)';
+    statusEl.style.color = '#a5b4fc';
+  }
+}
+
+function checkWin(player) {
+  // 行
+  for (let r = 0; r < SIZE; r++) {
+    if (board[r].every(cell => cell === player)) return true;
+  }
+  // 列
+  for (let c = 0; c < SIZE; c++) {
+    let ok = true;
+    for (let r = 0; r < SIZE; r++) {
+      if (board[r][c] !== player) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  // 对角线
+  if (board[0][0] === player && board[1][1] === player && board[2][2] === player) return true;
+  if (board[0][2] === player && board[1][1] === player && board[2][0] === player) return true;
+  return false;
+}
+
+function isWinnerCell(r, c) {
+  if (!winner) return false;
+  // 检查该坐标是否在获胜线上
+  // 行
+  if (board[r].every(cell => cell === winner)) return true;
+  // 列
+  for (let rr = 0; rr < SIZE; rr++) {
+    if (board[rr][c] !== winner) break;
+    if (rr === SIZE - 1) return true;
+  }
+  // 对角线
+  if (r === c && board[0][0] === winner && board[1][1] === winner && board[2][2] === winner) return true;
+  if (r + c === 2 && board[0][2] === winner && board[1][1] === winner && board[2][0] === winner) return true;
   return false;
 }
 
 function aiMove() {
-  if (gameOver) return;
-
-  // 1. Win
-  for (const [a, b, c] of WINS) {
-    const line = [board[a], board[b], board[c]];
-    if (line.filter(v => v === O).length === 2 && line.includes(null)) {
-      const idx = [a, b, c].find(i => board[i] === null);
-      place(idx, O);
-      if (checkWin(O)) { endGame('lose'); return; }
-      if (board.every(Boolean)) { endGame('draw'); return; }
-      turn = X; setStatus("X 的回合", ''); return;
+  // 简单的 AI：找空位
+  let empty = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (!board[r][c]) empty.push({ r, c });
     }
   }
-
-  // 2. Block X
-  for (const [a, b, c] of WINS) {
-    const line = [board[a], board[b], board[c]];
-    if (line.filter(v => v === X).length === 2 && line.includes(null)) {
-      const idx = [a, b, c].find(i => board[i] === null);
-      place(idx, O);
-      turn = X; setStatus("X 的回合", ''); return;
-    }
+  
+  if (empty.length === 0) return;
+  
+  // 优先占中心，然后角落
+  const center = { r: 1, c: 1 };
+  if (!board[1][1]) {
+    onClick(1, 1);
+    return;
   }
-
-  // 3. Center
-  if (board[4] === null) { place(4, O); turn = X; setStatus("X 的回合", ''); return; }
-
-  // 4. Corners
-  const corners = [0, 2, 6, 8].filter(i => board[i] === null);
-  if (corners.length) { place(corners[Math.floor(Math.random() * corners.length)], O); turn = X; setStatus("X 的回合", ''); return; }
-
-  // 5. Any
-  const empty = board.map((v, i) => v === null ? i : null).filter(i => i !== null);
-  if (empty.length) { place(empty[Math.floor(Math.random() * empty.length)], O); turn = X; setStatus("X 的回合", ''); }
+  
+  // 随机选一个
+  const move = empty[Math.floor(Math.random() * empty.length)];
+  onClick(move.r, move.c);
 }
 
-function endGame(result) {
-  gameOver = true;
-  cells.forEach(el => el.classList.add('disabled'));
-  if (result === 'win') {
-    scores.w++;
-    document.getElementById('sW').textContent = scores.w;
-    setStatus('🎉 你赢了！', 'win');
-  } else if (result === 'lose') {
-    scores.l++;
-    document.getElementById('sL').textContent = scores.l;
-    setStatus('😢 AI 获胜，再试一次！', 'lose');
-  } else {
-    scores.d++;
-    document.getElementById('sD').textContent = scores.d;
-    setStatus('🤝 平局！', 'draw');
+function undo() {
+  if (history.length === 0) return;
+  history.pop();
+  
+  board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+  for (const move of history) {
+    board[move.r][move.c] = move.player;
   }
-}
-
-function setStatus(txt, cls) {
-  document.getElementById('statusEl').textContent = txt;
-  document.getElementById('statusEl').className = 'status' + (cls ? ' ' + cls : '');
-}
-
-function renderBoard() {
-  board.forEach((_, i) => updateCell(i));
-}
-
-function reset() {
-  board = Array(9).fill(null);
-  turn = X;
+  
+  currentPlayer = 'X';
   gameOver = false;
-  cells.forEach((el, i) => {
-    el.textContent = '';
-    el.className = 'cell';
-  });
-  setStatus(mode === 'ai' ? '你的回合' : "X 的回合", '');
+  winner = null;
+  render();
 }
 
-function resetAll() {
-  scores = { w: 0, d: 0, l: 0 };
-  document.getElementById('sW').textContent = 0;
-  document.getElementById('sD').textContent = 0;
-  document.getElementById('sL').textContent = 0;
-  reset();
+function newGame() {
+  init();
 }
 
 init();
