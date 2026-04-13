@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>连连看</title>
+<style>
+  :root {
+    --bg: #05050a;
+    --surface: #0a0a12;
+    --card-bg: #12121e;
+    --card-hover: #1a1a2e;
+    --card-sel: #2a1a4a;
+    --text: #d8d8f0;
+    --muted: #44445a;
+    --accent: #c084fc;
+    --match-glow: #34d399;
+    --gold: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(192,132,252,0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(52,211,153,0.05) 0%, transparent 50%);
+  }
+  .grid-bg { position: fixed; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.008) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.008) 1px, transparent 1px);
+    background-size: 50px 50px; }
+
+  .header { text-align: center; margin-bottom: 14px; position: relative; z-index: 1; }
+  .header h1 {
+    font-size: 2.4rem; font-weight: 900; letter-spacing: 8px; line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--match-glow));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 5px;
+  }
+  .header p { color: var(--muted); font-size: 0.68rem; letter-spacing: 5px; text-transform: uppercase; }
+
+  .stats { display: flex; gap: 32px; align-items: center; margin-bottom: 12px; position: relative; z-index: 1; }
+  .stat { text-align: center; }
+  .stat-lbl { font-size: 0.58rem; letter-spacing: 3px; color: var(--muted); margin-bottom: 2px; }
+  .stat-val { font-size: 1.5rem; font-weight: 900; color: var(--accent); }
+  .stat-val.time { color: var(--match-glow); font-variant-numeric: tabular-nums; }
+  .stat-val.score { color: var(--gold); }
+
+  .msg { font-size: 0.8rem; height: 20px; margin-bottom: 10px; letter-spacing: 1px; position: relative; z-index: 1; transition: all 0.3s; text-align: center; }
+  .msg.win { color: var(--gold); font-weight: bold; animation: glow 0.8s ease infinite alternate; }
+  .msg.fail { color: #f87171; }
+  @keyframes glow { from{text-shadow:0 0 8px rgba(251,191,36,0.5)} to{text-shadow:0 0 20px rgba(251,191,36,1)} }
+
+  #board {
+    display: grid;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+    padding: 14px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid rgba(192,132,252,0.12);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(192,132,252,0.05);
+  }
+
+  .tile {
+    width: 52px; height: 52px;
+    background: var(--card-bg);
+    border: 2px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative; overflow: hidden;
+    user-select: none;
+  }
+  .tile::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .tile:hover:not(.empty):not(.removing) {
+    background: var(--card-hover);
+    border-color: rgba(192,132,252,0.4);
+    transform: scale(1.06);
+    box-shadow: 0 4px 16px rgba(192,132,252,0.2);
+  }
+  .tile.selected {
+    background: var(--card-sel);
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(192,132,252,0.4);
+    transform: scale(1.08);
+  }
+  .tile.empty {
+    background: transparent; border-color: transparent; cursor: default; pointer-events: none;
+  }
+  .tile.matched {
+    animation: matchPop 0.4s ease forwards;
+  }
+  .tile.no-match {
+    animation: noMatch 0.3s ease;
+  }
+  @keyframes matchPop {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.8; background: rgba(52,211,153,0.3); border-color: var(--match-glow); }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  @keyframes noMatch {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); border-color: #f87171; }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+
+  .hint-flash { animation: hintGlow 0.5s ease 3; }
+  @keyframes hintGlow {
+    0%,100% { box-shadow: none; }
+    50% { box-shadow: 0 0 20px rgba(251,191,36,0.7); border-color: var(--gold); transform: scale(1.1); }
+  }
+
+  .btns { display: flex; gap: 12px; margin-top: 14px; position: relative; z-index: 1; }
+  .btn {
+    padding: 9px 24px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; border-radius: 5px; transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+  }
+  .btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent); transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s ease; z-index: -1;
+  }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn:hover { color: #fff; }
+  .btn.hint { border-color: var(--gold); color: var(--gold); }
+  .btn.hint::before { background: var(--gold); }
+
+  .hint-timer-bar {
+    width: 100%; max-width: 580px; height: 3px; background: rgba(255,255,255,0.05);
+    border-radius: 2px; margin-top: 8px; overflow: hidden; position: relative; z-index: 1;
+  }
+  .hint-timer-bar-fill {
+    height: 100%; background: linear-gradient(90deg, var(--gold), rgba(251,191,36,0.4));
+    border-radius: 2px; transition: width linear;
+  }
+
+  .progress-bar {
+    width: 100%; max-width: 580px; height: 3px; background: rgba(255,255,255,0.05);
+    border-radius: 2px; margin-bottom: 12px; overflow: hidden; position: relative; z-index: 1;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--match-glow));
+    border-radius: 2px; transition: width 0.4s ease;
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="header">
+  <h1>连连看</h1>
+  <p>MATCH PAIRS &nbsp;·&nbsp; 经典配对</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-lbl">剩余</div><div class="stat-val" id="remainVal">0</div></div>
+  <div class="stat"><div class="stat-lbl">分数</div><div class="stat-val score" id="scoreVal">0</div></div>
+  <div class="stat"><div class="stat-lbl">用时</div><div class="stat-val time" id="timeVal">0:00</div></div>
+  <div class="stat"><div class="stat-lbl">关卡</div><div class="stat-val" id="levelVal">1</div></div>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+<div class="msg" id="msg">点击两个相同的图标即可消除</div>
+
+<div id="board"></div>
+
+<div class="btns">
+  <button class="btn hint" onclick="hint()">💡 提示</button>
+  <button class="btn" onclick="shuffle()">🔀 重新排列</button>
+  <button class="btn" onclick="newGame()">🆕 新游戏</button>
+</div>
+
+<script>
+// ─── Icons / Tile Types ───────────────────────────────────
+const ICONS = [
+  '🍎','🍊','🍋','🍇','🍓','🍑','🍒','🥝','🍌','🥭',
+  '🌸','🌺','🌻','🌷','🌹','🌈','⭐','🌙','🔥','💎',
+  '🎈','🎀','🎁','🎯','🎲','🎭','🦋','🐱','🐶','🐼'
+];
+
+// ─── Game Config ──────────────────────────────────────────
+const COLS = 10, ROWS = 6;
+
+let tiles = [];       // tiles[row][col] = iconChar | null
+let selected = null;  // {r, c}
+let score = 0, level = 1, matchedPairs = 0, totalPairs = 0;
+let timerInterval = null, elapsed = 0, hintTimeout = null;
+let hintTiles = [];
+let isAnimating = false;
+
+const board = document.getElementById('board');
+
+// ─── Init ─────────────────────────────────────────────────
+function initGame() {
+  clearInterval(timerInterval);
+  clearTimeout(hintTimeout);
+
+  const totalTiles = COLS * ROWS;
+  totalPairs = totalTiles / 2;
+
+  // Generate pairs
+  const pool = [];
+  for (let i = 0; i < totalPairs; i++) {
+    const icon = ICONS[i % ICONS.length];
+    pool.push(icon, icon);
+  }
+
+  // Shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  // Fill grid
+  tiles = [];
+  let idx = 0;
+  for (let r = 0; r < ROWS; r++) {
+    tiles[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      tiles[r][c] = pool[idx++];
+    }
+  }
+
+  selected = null;
+  score = 0;
+  matchedPairs = 0;
+  elapsed = 0;
+  hintTiles = [];
+  isAnimating = false;
+
+  document.getElementById('scoreVal').textContent = '0';
+  document.getElementById('levelVal').textContent = level;
+  document.getElementById('msg').textContent = '点击两个相同的图标即可消除';
+  document.getElementById('msg').className = 'msg';
+
+  renderBoard();
+  updateProgress();
+  startTimer();
+}
+
+function newGame() { level = 1; initGame(); }
+function restartLevel() { initGame(); }
+
+// ─── Render ───────────────────────────────────────────────
+function renderBoard() {
+  board.innerHTML = '';
+  board.style.gridTemplateColumns = `repeat(${COLS}, 52px)`;
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const el = document.createElement('div');
+      el.className = 'tile';
+      el.dataset.r = r; el.dataset.c = c;
+      if (tiles[r][c]) {
+        el.textContent = tiles[r][c];
+        el.onclick = () => handleClick(r, c);
+      } else {
+        el.classList.add('empty');
+      }
+      board.appendChild(el);
+    }
+  }
+  document.getElementById('remainVal').textContent = countRemaining();
+}
+
+function getTileEl(r, c) {
+  return board.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+}
+
+function updateProgress() {
+  const pct = totalPairs > 0 ? (matchedPairs / totalPairs) * 100 : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function countRemaining() {
+  let cnt = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) cnt++;
+  return cnt;
+}
+
+// ─── Click Handler ─────────────────────────────────────────
+function handleClick(r, c) {
+  if (isAnimating || !tiles[r][c]) return;
+  clearHint();
+
+  const el = getTileEl(r, c);
+
+  if (selected && selected.r === r && selected.c === c) {
+    // Deselect
+    el.classList.remove('selected');
+    selected = null;
+    return;
+  }
+
+  if (!selected) {
+    selected = { r, c };
+    el.classList.add('selected');
+    return;
+  }
+
+  // Second tile selected
+  const firstEl = getTileEl(selected.r, selected.c);
+
+  if (tiles[selected.r][selected.c] === tiles[r][c]) {
+    // Match!
+    const icon = tiles[r][c];
+    isAnimating = true;
+    el.classList.add('selected');
+
+    setTimeout(() => {
+      firstEl.classList.add('matched');
+      el.classList.add('matched');
+      setTimeout(() => {
+        tiles[selected.r][selected.c] = null;
+        tiles[r][c] = null;
+        firstEl.classList.remove('selected');
+        firstEl.classList.remove('matched');
+        firstEl.classList.add('empty');
+        firstEl.textContent = '';
+        el.classList.remove('selected');
+        el.classList.remove('matched');
+        el.classList.add('empty');
+        el.textContent = '';
+        selected = null;
+        matchedPairs++;
+        score += 10 + Math.max(0, 20 - elapsed);
+        document.getElementById('scoreVal').textContent = score;
+        document.getElementById('remainVal').textContent = countRemaining();
+        updateProgress();
+        isAnimating = false;
+
+        if (matchedPairs >= totalPairs) {
+          winGame();
+        }
+      }, 400);
+    }, 100);
+  } else {
+    // No match
+    el.classList.add('no-match');
+    firstEl.classList.add('no-match');
+    setTimeout(() => {
+      el.classList.remove('no-match');
+      firstEl.classList.remove('no-match');
+      el.classList.remove('selected');
+      firstEl.classList.remove('selected');
+      selected = null;
+    }, 300);
+  }
+}
+
+// ─── Connection Check ──────────────────────────────────────
+// Can connect if path has at most 2 turns
+function canConnect(r1, c1, r2, c2) {
+  // Zero turns: straight line
+  if (r1 === r2) return clearH(r1, c1, c2);
+  if (c1 === c2) return clearV(r1, r2, c1);
+
+  // One turn: L shape
+  if (tiles[r1][c2] === null && (r1 === r2 || c1 === c2 ? false : true)) {
+    if (clearH(r1, c1, c2) && clearV(r1, r2, c2)) return [[r1,c1],[r1,c2],[r2,c2]];
+  }
+  if (tiles[r2][c1] === null) {
+    if (clearV(r1, r2, c1) && clearH(r2, c1, c2)) return [[r1,c1],[r2,c1],[r2,c2]];
+  }
+
+  // Two turns: find through empty row/col
+  // Through (r1, c2)
+  if (clearH(r1, c1, c2) && clearV(r1, r2, c2) && clearH(r2, c1, c2)) return [[r1,c1],[r1,c2],[r2,c2]];
+  // Through (r2, c1)
+  if (clearV(r1, r2, c1) && clearH(r2, c1, c2) && clearV(r1, r2, c1)) return [[r1,c1],[r2,c1],[r2,c2]];
+
+  // Try all intermediate rows/cols
+  // Row scan
+  for (let rc = -1; rc <= ROWS; rc++) {
+    if (rc === r1 || rc === r2) continue;
+    const midR1 = rc, midC1 = c1;
+    const midR2 = rc, midC2 = c2;
+    if (clearV(r1, midR1, c1) &&
+        clearH(midR1, c1, c2) &&
+        clearV(midR2, r2, c2) &&
+        (rc < 0 || rc >= ROWS || tiles[rc][c1] === null) &&
+        (rc < 0 || rc >= ROWS || tiles[rc][c2] === null)) {
+      return [[r1,c1],[rc,c1],[rc,c2],[r2,c2]];
+    }
+  }
+  // Col scan
+  for (let cc = -1; cc <= COLS; cc++) {
+    if (cc === c1 || cc === c2) continue;
+    if (clearH(r1, c1, cc) &&
+        clearV(r1, r2, cc) &&
+        clearH(r2, cc, c2) &&
+        (cc < 0 || cc >= COLS || tiles[r1][cc] === null) &&
+        (cc < 0 || cc >= COLS || tiles[r2][cc] === null)) {
+      return [[r1,c1],[r1,cc],[r2,cc],[r2,c2]];
+    }
+  }
+
+  return false;
+}
+
+function clearH(r, c1, c2) {
+  const [lo, hi] = c1 < c2 ? [c1, c2] : [c2, c1];
+  for (let c = lo + 1; c < hi; c++) {
+    if (c >= 0 && c < COLS && r >= 0 && r < ROWS && tiles[r][c] !== null) return false;
+  }
+  return true;
+}
+
+function clearV(r1, r2, c) {
+  const [lo, hi] = r1 < r2 ? [r1, r2] : [r2, r1];
+  for (let r = lo + 1; r < hi; r++) {
+    if (c >= 0 && c < COLS && r >= 0 && r < ROWS && tiles[r][c] !== null) return false;
+  }
+  return true;
+}
+
+// ─── Hint ──────────────────────────────────────────────────
+function hint() {
+  clearHint();
+  const pairs = [];
+  for (let r1 = 0; r1 < ROWS; r1++)
+    for (let c1 = 0; c1 < COLS; c1++)
+      if (tiles[r1][c1])
+        for (let r2 = 0; r2 < ROWS; r2++)
+          for (let c2 = 0; c2 < COLS; c2++)
+            if (tiles[r2][c2] && tiles[r1][c1] === tiles[r2][c2] && (r1 !== r2 || c1 !== c2))
+              if (canConnect(r1, c1, r2, c2))
+                pairs.push([[r1,c1],[r2,c2]]);
+
+  if (pairs.length === 0) {
+    document.getElementById('msg').textContent = '无可连的对了！点击重新排列';
+    document.getElementById('msg').className = 'msg fail';
+    return;
+  }
+
+  const pair = pairs[Math.floor(Math.random() * pairs.length)];
+  hintTiles = pair;
+  pair.forEach(([r, c]) => {
+    const el = getTileEl(r, c);
+    el.classList.add('hint-flash');
+  });
+
+  // Remove hint after 2s
+  hintTimeout = setTimeout(clearHint, 2000);
+}
+
+function clearHint() {
+  clearTimeout(hintTimeout);
+  hintTiles.forEach(([r, c]) => {
+    const el = getTileEl(r, c);
+    if (el) el.classList.remove('hint-flash');
+  });
+  hintTiles = [];
+}
+
+// ─── Shuffle ───────────────────────────────────────────────
+function shuffle() {
+  if (isAnimating) return;
+  clearHint();
+  // Collect remaining tiles
+  const remaining = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) remaining.push(tiles[r][c]);
+
+  // Shuffle
+  for (let i = remaining.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+  }
+
+  // Refill
+  let idx = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) tiles[r][c] = remaining[idx++];
+
+  // Deselect
+  if (selected) {
+    const el = getTileEl(selected.r, selected.c);
+    if (el) el.classList.remove('selected');
+    selected = null;
+  }
+
+  // Visual shuffle flash
+  board.style.opacity = '0.3';
+  setTimeout(() => {
+    renderBoard();
+    board.style.opacity = '1';
+    board.style.transition = 'opacity 0.3s';
+    setTimeout(() => board.style.transition = '', 300);
+  }, 150);
+}
+
+// ─── Timer ─────────────────────────────────────────────────
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  elapsed = 0;
+  document.getElementById('timeVal').textContent = '0:00';
+  timerInterval = setInterval(() => {
+    elapsed++;
+    document.getElementById('timeVal').textContent = formatTime(elapsed);
+  }, 1000);
+}
+
+// ─── Win ───────────────────────────────────────────────────
+function winGame() {
+  clearInterval(timerInterval);
+  const bonus = Math.max(0, 50 - elapsed);
+  score += bonus;
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('msg').innerHTML = `🎉 第 ${level} 关通过！加分 ${bonus}，总 ${score} 分`;
+  document.getElementById('msg').className = 'msg win';
+  setTimeout(() => {
+    level++;
+    initGame();
+  }, 2500);
+}
+
+// ─── Boot ──────────────────────────────────────────────────
+initGame();
+</script>
+</body>
+</html>

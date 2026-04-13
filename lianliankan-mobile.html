@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>连连看</title>
+<style>
+  :root {
+    --bg: #05050c; --surface: #0a0a16; --card: #101024;
+    --text: #d8d8f0; --muted: #44445a;
+    --accent: #f472b6; --match: #34d399; --gold: #fbbf24; --cyan: #67e8f9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+    overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  }
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; flex-shrink: 0;
+    background: rgba(0,0,0,0.4);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .back-btn { font-size: 1.4rem; background: none; border: none; color: #666688; cursor: pointer; text-decoration: none; padding: 4px 10px; }
+  .top-title { font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; color: #c0c8e8; }
+  .top-right { font-size: 0.68rem; color: var(--muted); }
+
+  .stats {
+    display: flex; gap: 20px; align-items: center; justify-content: center;
+    padding: 8px 14px; flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stat-lbl { font-size: 0.52rem; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .stat-val { font-size: 1rem; font-weight: 900; color: var(--accent); }
+  .stat-val.score { color: var(--gold); }
+  .stat-val.time { color: var(--cyan); }
+
+  .msg {
+    font-size: 0.72rem; text-align: center; padding: 6px 14px;
+    min-height: 26px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: #6a6a8a;
+  }
+  .msg.win { color: var(--gold); font-weight: 700; animation: glow 0.8s ease infinite alternate; }
+  .msg.fail { color: #f87171; }
+  @keyframes glow { from{text-shadow:0 0 6px rgba(251,191,36,0.4)} to{text-shadow:0 0 18px rgba(251,191,36,0.9)} }
+
+  #board {
+    flex: 1; display: grid;
+    gap: 3px;
+    padding: 8px;
+    align-content: center; justify-content: center;
+    touch-action: manipulation;
+  }
+  .tile {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; cursor: pointer; user-select: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    aspect-ratio: 1; position: relative;
+    font-size: clamp(1rem, 4vw, 1.6rem);
+  }
+  .tile:active { transform: scale(0.92); }
+  .tile.empty { background: transparent; border: none; cursor: default; pointer-events: none; }
+  .tile.normal {
+    background: var(--card);
+    border: 1.5px solid rgba(255,255,255,0.1);
+  }
+  .tile.selected {
+    background: rgba(244,114,182,0.2);
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(244,114,182,0.4);
+    transform: scale(1.08);
+    z-index: 2;
+  }
+  .tile.hint { animation: hintFlash 0.6s ease infinite; }
+  @keyframes hintFlash {
+    0%,100% { box-shadow: none; border-color: rgba(255,255,255,0.1); }
+    50% { box-shadow: 0 0 20px rgba(251,191,36,0.7); border-color: var(--gold); }
+  }
+  .tile.matched { animation: matchAnim 0.4s ease forwards; }
+  @keyframes matchAnim {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  .tile.nomatch { animation: shakeAnim 0.3s ease; }
+  @keyframes shakeAnim {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); border-color: #f87171; }
+    75% { transform: translateX(4px); border-color: #f87171; }
+  }
+
+  .btns {
+    display: flex; gap: 8px; padding: 8px 14px 14px; flex-shrink: 0;
+    background: rgba(0,0,0,0.3);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .btn {
+    flex: 1; padding: 11px 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: #7888a8; font-size: 0.65rem; letter-spacing: 0.5px;
+    cursor: pointer; border-radius: 10px; text-align: center;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn:active { background: rgba(255,255,255,0.12); transform: scale(0.97); }
+  .btn-hint { color: var(--gold); border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.07); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a href="index.html" class="back-btn">←</a>
+  <div class="top-title">连连看 · Match Pairs</div>
+  <div class="top-right" id="remainEl">24对</div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-lbl">剩余</div><div class="stat-val" id="cntEl">24</div></div>
+  <div class="stat"><div class="stat-lbl">分数</div><div class="stat-val score" id="scoreEl">0</div></div>
+  <div class="stat"><div class="stat-lbl">用时</div><div class="stat-val time" id="timeEl">0:00</div></div>
+</div>
+
+<div class="msg" id="msgEl">点击两个相同的图标即可消除</div>
+
+<div id="board"></div>
+
+<div class="btns">
+  <button class="btn btn-hint" onclick="hint()">💡 提示</button>
+  <button class="btn" onclick="shuffle()">🔀 重排</button>
+  <button class="btn" onclick="newGame()">🆕 新游戏</button>
+</div>
+
+<script>
+const COLS = 8, ROWS = 6;
+const TOTAL_PAIRS = (COLS * ROWS) / 2;
+const ICONS = [
+  '🍎','🍊','🍋','🍇','🍓','🍑','🍒','🥝',
+  '🍌','🥭','🌸','🌺','🌻','🌷','🌹','⭐',
+  '🔥','💎','🎈','🎀','🎯','🎲','🦋','🐱'
+];
+
+let tiles = [];       // 2D array: tiles[row][col] = icon string or null
+let selected = null; // { r, c, el }
+let score = 0, matched = 0;
+let timerInterval = null, elapsed = 0;
+let hintPair = null, hintTimeout = null;
+let isAnim = false;
+
+const boardEl = document.getElementById('board');
+
+function initGame() {
+  clearInterval(timerInterval);
+  clearTimeout(hintTimeout);
+
+  // Build pair pool
+  const pool = [];
+  for (let i = 0; i < TOTAL_PAIRS; i++) {
+    pool.push(ICONS[i % ICONS.length], ICONS[i % ICONS.length]);
+  }
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  // Fill 2D grid
+  tiles = [];
+  let idx = 0;
+  for (let r = 0; r < ROWS; r++) {
+    tiles[r] = [];
+    for (let c = 0; c < COLS; c++) tiles[r][c] = pool[idx++];
+  }
+
+  selected = null; score = 0; matched = 0;
+  hintPair = null; isAnim = false;
+
+  document.getElementById('scoreEl').textContent = '0';
+  document.getElementById('msgEl').textContent = '点击两个相同的图标即可消除';
+  document.getElementById('msgEl').className = 'msg';
+
+  renderBoard();
+  startTimer();
+}
+
+function startTimer() {
+  elapsed = 0;
+  document.getElementById('timeEl').textContent = '0:00';
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    elapsed++;
+    const m = Math.floor(elapsed / 60), s = elapsed % 60;
+    document.getElementById('timeEl').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+  }, 1000);
+}
+
+function renderBoard() {
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  const totalW = Math.min(window.innerWidth - 20, 480);
+  const tileSize = Math.floor(totalW / COLS);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const el = document.createElement('div');
+      const icon = tiles[r][c];
+
+      el.style.width = tileSize + 'px';
+      el.style.height = tileSize + 'px';
+      el.style.fontSize = Math.floor(tileSize * 0.55) + 'px';
+
+      if (icon) {
+        el.textContent = icon;
+        el.className = 'tile normal';
+        el.dataset.r = r;
+        el.dataset.c = c;
+        el.addEventListener('click', onTileClick);
+      } else {
+        el.className = 'tile empty';
+      }
+
+      boardEl.appendChild(el);
+    }
+  }
+  updateCounters();
+}
+
+function updateCounters() {
+  let cnt = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) cnt++;
+  const pairs = cnt / 2;
+  document.getElementById('cntEl').textContent = pairs;
+  document.getElementById('remainEl').textContent = pairs + '对';
+}
+
+function getTileEl(r, c) {
+  return boardEl.children[r * COLS + c];
+}
+
+function onTileClick(e) {
+  if (isAnim) return;
+  const el = e.currentTarget;
+  const r = parseInt(el.dataset.r), c = parseInt(el.dataset.c);
+  if (!tiles[r][c]) return;
+
+  clearHint();
+
+  // Deselect same tile
+  if (selected && selected.r === r && selected.c === c) {
+    el.classList.remove('selected');
+    selected = null;
+    return;
+  }
+
+  if (!selected) {
+    selected = { r, c, el };
+    el.classList.add('selected');
+    return;
+  }
+
+  // Second tile selected
+  const first = selected;
+  const icon1 = tiles[first.r][first.c];
+  const icon2 = tiles[r][c];
+
+  if (icon1 === icon2) {
+    // Check if path exists
+    const path = canConnect(first.r, first.c, r, c);
+    if (path) {
+      // Valid match
+      isAnim = true;
+      el.classList.add('selected');
+      // Draw path effect (optional - skip for simplicity)
+      setTimeout(() => {
+        first.el.classList.add('matched');
+        el.classList.add('matched');
+        setTimeout(() => {
+          tiles[first.r][first.c] = null;
+          tiles[r][c] = null;
+          first.el.textContent = '';
+          first.el.className = 'tile empty';
+          el.textContent = '';
+          el.className = 'tile empty';
+          selected = null;
+          matched++;
+          score += 10 + Math.max(0, 20 - elapsed);
+          document.getElementById('scoreEl').textContent = score;
+          updateCounters();
+          isAnim = false;
+          if (matched >= TOTAL_PAIRS) winGame();
+        }, 380);
+      }, 80);
+    } else {
+      // Same icon, no valid path
+      flashNoMatch(first.el, el);
+      first.el.classList.remove('selected');
+      selected = null;
+    }
+  } else {
+    // Different icons
+    flashNoMatch(first.el, el);
+    first.el.classList.remove('selected');
+    selected = null;
+  }
+}
+
+function flashNoMatch(el1, el2) {
+  el1.classList.add('nomatch');
+  el2.classList.add('nomatch');
+  setTimeout(() => {
+    el1.classList.remove('nomatch');
+    el2.classList.remove('nomatch');
+  }, 300);
+}
+
+// ─── Path finding: max 2 turns ───────────────────────────
+function canConnect(r1, c1, r2, c2) {
+  // Direct horizontal
+  if (r1 === r2 && clearH(r1, c1, c2)) return true;
+  // Direct vertical
+  if (c1 === c2 && clearV(r1, r2, c1)) return true;
+
+  // One turn: corner
+  if (tiles[r1][c2] === null && clearH(r1, c1, c2) && clearV(r1, r2, c2)) return true;
+  if (tiles[r2][c1] === null && clearV(r1, r2, c1) && clearH(r2, c1, c2)) return true;
+
+  // Two turns: scan all rows
+  for (let rc = 0; rc < ROWS; rc++) {
+    if (rc === r1 || rc === r2) continue;
+    if (tiles[rc][c1] === null && tiles[rc][c2] === null &&
+        clearV(r1, rc, c1) && clearH(rc, c1, c2) && clearV(rc, r2, c2)) return true;
+  }
+  // Two turns: scan all cols
+  for (let cc = 0; cc < COLS; cc++) {
+    if (cc === c1 || cc === c2) continue;
+    if (tiles[r1][cc] === null && tiles[r2][cc] === null &&
+        clearH(r1, c1, cc) && clearV(r1, r2, cc) && clearH(r2, cc, c2)) return true;
+  }
+  return false;
+}
+
+function clearH(r, c1, c2) {
+  const lo = Math.min(c1, c2), hi = Math.max(c1, c2);
+  for (let c = lo + 1; c < hi; c++) if (tiles[r][c] !== null) return false;
+  return true;
+}
+function clearV(r1, r2, c) {
+  const lo = Math.min(r1, r2), hi = Math.max(r1, r2);
+  for (let r = lo + 1; r < hi; r++) if (tiles[r][c] !== null) return false;
+  return true;
+}
+
+// ─── Hint ─────────────────────────────────────────────────
+function hint() {
+  if (isAnim) return;
+  clearHint();
+  for (let r1 = 0; r1 < ROWS; r1++)
+    for (let c1 = 0; c1 < COLS; c1++)
+      if (tiles[r1][c1])
+        for (let r2 = 0; r2 < ROWS; r2++)
+          for (let c2 = 0; c2 < COLS; c2++)
+            if (tiles[r2][c2] && tiles[r1][c1] === tiles[r2][c2] && (r1 !== r2 || c1 !== c2))
+              if (canConnect(r1, c1, r2, c2)) {
+                hintPair = [[r1, c1], [r2, c2]];
+                const el1 = getTileEl(r1, c1), el2 = getTileEl(r2, c2);
+                el1.classList.add('hint');
+                el2.classList.add('hint');
+                hintTimeout = setTimeout(clearHint, 2500);
+                document.getElementById('msgEl').textContent = '💡 找到一对！';
+                return;
+              }
+  document.getElementById('msgEl').textContent = '没有可连的对了，请重排';
+  document.getElementById('msgEl').className = 'msg fail';
+}
+
+function clearHint() {
+  clearTimeout(hintTimeout);
+  if (hintPair) {
+    hintPair.forEach(([r, c]) => {
+      const el = getTileEl(r, c);
+      if (el) el.classList.remove('hint');
+    });
+    hintPair = null;
+  }
+}
+
+// ─── Shuffle ─────────────────────────────────────────────
+function shuffle() {
+  if (isAnim) return;
+  clearHint();
+  const rem = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) rem.push(tiles[r][c]);
+  for (let i = rem.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rem[i], rem[j]] = [rem[j], rem[i]];
+  }
+  let k = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c]) tiles[r][c] = rem[k++];
+  if (selected) selected.el.classList.remove('selected');
+  selected = null;
+  renderBoard();
+}
+
+// ─── Win ──────────────────────────────────────────────────
+function winGame() {
+  clearInterval(timerInterval);
+  const bonus = Math.max(0, 50 - elapsed);
+  score += bonus;
+  document.getElementById('scoreEl').textContent = score;
+  document.getElementById('msgEl').innerHTML = `🎉 全部消除！得分 ${score}（含用时奖励+${bonus}）`;
+  document.getElementById('msgEl').className = 'msg win';
+}
+
+function newGame() {
+  initGame();
+}
+
+window.addEventListener('resize', renderBoard);
+initGame();
+</script>
+</body>
+</html>

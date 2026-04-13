@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小马宝莉拼图</title>
+<style>
+  :root {
+    --bg: #100b1f;
+    --surface: #1a1030;
+    --text: #eee0ff;
+    --muted: #8878a0;
+    --pink: #f472b6;
+    --purple: #c084fc;
+    --cyan: #67e8f9;
+    --gold: #fbbf24;
+    --mint: #6ee7b7;
+    --peach: #fdba74;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 25% 15%, rgba(244,114,182,0.09) 0%, transparent 50%),
+      radial-gradient(ellipse at 75% 85%, rgba(192,132,252,0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(103,232,249,0.03) 0%, transparent 60%);
+  }
+  .stars {
+    position: fixed; inset: 0; pointer-events: none;
+    background-image:
+      radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 35% 60%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1px 1px at 65% 35%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 85% 70%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(2px 2px at 45% 80%, rgba(244,114,182,0.4), transparent),
+      radial-gradient(2px 2px at 75% 15%, rgba(192,132,252,0.4), transparent);
+    background-size: 100% 100%;
+  }
+
+  .header { text-align: center; margin-bottom: 12px; position: relative; z-index: 1; }
+  .header h1 {
+    font-size: 2rem; font-weight: 900; letter-spacing: 4px; line-height: 1;
+    background: linear-gradient(135deg, var(--pink), var(--purple), var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 4px;
+  }
+  .header p { color: var(--muted); font-size: 0.62rem; letter-spacing: 4px; text-transform: uppercase; }
+
+  .top-row { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; position: relative; z-index: 1; flex-wrap: wrap; justify-content: center; }
+  .diff-btn {
+    padding: 6px 18px;
+    border: 2px solid var(--muted);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; border-radius: 4px; transition: all 0.2s;
+  }
+  .diff-btn:hover { border-color: var(--purple); color: var(--purple); }
+  .diff-btn.active-3 { border-color: var(--mint); color: var(--mint); background: rgba(110,231,183,0.08); }
+  .diff-btn.active-4 { border-color: var(--gold); color: var(--gold); background: rgba(251,191,36,0.08); }
+  .diff-btn.active-5 { border-color: var(--pink); color: var(--pink); background: rgba(244,114,182,0.08); }
+
+  .pony-tabs { display: flex; gap: 8px; margin-bottom: 10px; position: relative; z-index: 1; }
+  .pony-tab {
+    padding: 6px 16px;
+    border: 2px solid transparent;
+    background: var(--surface);
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    font-size: 0.65rem; letter-spacing: 1px;
+    cursor: pointer; border-radius: 20px; transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pony-tab:hover { border-color: var(--purple); color: var(--text); }
+  .pony-tab.active { border-color: var(--purple); background: rgba(192,132,252,0.15); color: var(--text); box-shadow: 0 0 12px rgba(192,132,252,0.2); }
+
+  .stats { display: flex; gap: 24px; align-items: center; margin-bottom: 8px; position: relative; z-index: 1; }
+  .stat { text-align: center; }
+  .stat-lbl { font-size: 0.55rem; letter-spacing: 2px; color: var(--muted); margin-bottom: 1px; }
+  .stat-val { font-size: 1.3rem; font-weight: 900; color: var(--purple); }
+  .stat-val.time { color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .stat-val.moves { color: var(--pink); }
+
+  .msg { font-size: 0.75rem; height: 18px; margin-bottom: 8px; letter-spacing: 1px; position: relative; z-index: 1; text-align: center; transition: all 0.3s; }
+  .msg.win { color: var(--gold); font-weight: bold; animation: glow 0.8s ease infinite alternate; }
+  @keyframes glow { from{text-shadow:0 0 8px rgba(251,191,36,0.5)} to{text-shadow:0 0 20px rgba(251,191,36,1)} }
+
+  #puzzleWrap { position: relative; z-index: 1; }
+  #puzzleCanvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(192,132,252,0.1);
+    cursor: pointer;
+  }
+
+  .btns { display: flex; gap: 10px; margin-top: 10px; position: relative; z-index: 1; }
+  .btn {
+    padding: 8px 20px;
+    background: transparent;
+    border: 2px solid var(--purple);
+    color: var(--purple);
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; border-radius: 5px; transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+  }
+  .btn::before { content: ''; position: absolute; inset: 0; background: var(--purple); transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease; z-index: -1; }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn:hover { color: #fff; }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+
+<div class="header">
+  <h1>🦄 小马宝莉拼图</h1>
+  <p>My Little Pony &nbsp;·&nbsp; 滑动拼图</p>
+</div>
+
+<div class="top-row">
+  <button class="diff-btn active-3" id="btn3" onclick="setDiff(3)">3×3 简单</button>
+  <button class="diff-btn" id="btn4" onclick="setDiff(4)">4×4 困难</button>
+  <button class="diff-btn" id="btn5" onclick="setDiff(5)">5×5 超难</button>
+</div>
+
+<div class="pony-tabs">
+  <button class="pony-tab active" id="tab0" onclick="setPony(0)">🟣 紫悦</button>
+  <button class="pony-tab" id="tab1" onclick="setPony(1)">🩵 云宝</button>
+  <button class="pony-tab" id="tab2" onclick="setPony(2)">🩷 萍琪</button>
+  <button class="pony-tab" id="tab3" onclick="setPony(3)">🧡 苹果</button>
+  <button class="pony-tab" id="tab4" onclick="setPony(4)">💚 柔柔</button>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-lbl">步数</div><div class="stat-val moves" id="movesVal">0</div></div>
+  <div class="stat"><div class="stat-lbl">用时</div><div class="stat-val time" id="timeVal">0:00</div></div>
+  <div class="stat"><div class="stat-lbl">最优点数</div><div class="stat-val" id="bestVal">—</div></div>
+</div>
+
+<div class="msg" id="msg">点击滑动拼图，数字按顺序排列即可通关</div>
+
+<div id="puzzleWrap">
+  <canvas id="puzzleCanvas"></canvas>
+</div>
+
+<div class="btns">
+  <button class="btn" onclick="newPuzzle()">🆕 新拼图</button>
+  <button class="btn" onclick="previewImage()">👁 预览原图</button>
+  <button class="btn" onclick="solveStep()">💡 提示一步</button>
+</div>
+
+<script>
+// ─── Config ─────────────────────────────────────────────────
+let GRID = 3;
+let CANVAS_SIZE = 420;
+let cellW, cellH;
+let timerInterval = null, elapsed = 0, moves = 0;
+let solved = false;
+let bestScores = { 3: null, 4: null, 5: null };
+
+const canvas = document.getElementById('puzzleCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = CANVAS_SIZE;
+canvas.height = CANVAS_SIZE;
+
+// ─── Current Pony ────────────────────────────────────────────
+let ponyIndex = 0;
+
+// ─── Pony Color Schemes ────────────────────────────────────
+const PONIES = [
+  { name: '紫悦 Twilight', color: '#9333EA', color2: '#C084FC', color3: '#F0ABFC', mane: '#7C3AED', eye: '#8B5CF6', bg: '#1a0533', accent: '#a855f7', symbol: '⭐' },
+  { name: '云宝 Dash',     color: '#0EA5E9', color2: '#38BDF8', color3: '#7DD3FC', mane: '#0284C7', eye: '#0EA5E9', bg: '#0c1a2e', accent: '#38bdf8', symbol: '⚡' },
+  { name: '萍琪 Pie',     color: '#EC4899', color2: '#F472B6', color3: '#FBCFE8', mane: '#DB2777', eye: '#EC4899', bg: '#2a0a1e', accent: '#f472b6', symbol: '🎀' },
+  { name: '苹果嘉儿 Apple', color: '#EA580C', color2: '#F97316', color3: '#FDBA74', mane: '#C2410C', eye: '#EA580C', bg: '#2a1000', accent: '#f97316', symbol: '🍎' },
+  { name: '柔柔 Fluttershy', color: '#16A34A', color2: '#4ADE80', color3: '#BBF7D0', mane: '#15803D', eye: '#16A34A', bg: '#0a2010', accent: '#4ade80', symbol: '🦋' },
+];
+
+// ─── Number Tile Board ──────────────────────────────────────
+// Board state: 0 = empty (last position)
+let board = [];  // array of numbers 0..n-1, 0 = empty
+
+function initBoard() {
+  board = [];
+  const n = GRID * GRID;
+  for (let i = 0; i < n - 1; i++) board.push(i + 1);
+  board.push(0); // empty at end
+}
+
+function shuffleBoard() {
+  // Do random valid moves to ensure solvable
+  let emptyIdx = board.indexOf(0);
+  for (let i = 0; i < GRID * GRID * 30; i++) {
+    const neighbors = getNeighbors(emptyIdx);
+    const ni = neighbors[Math.floor(Math.random() * neighbors.length)];
+    [board[emptyIdx], board[ni]] = [board[ni], board[emptyIdx]];
+    emptyIdx = ni;
+  }
+  // Verify solvable
+  if (!isSolvable()) shuffleBoard();
+  moves = 0;
+  document.getElementById('movesVal').textContent = '0';
+}
+
+function getNeighbors(idx) {
+  const r = Math.floor(idx / GRID), c = idx % GRID;
+  const n = [];
+  if (r > 0) n.push(idx - GRID);
+  if (r < GRID - 1) n.push(idx + GRID);
+  if (c > 0) n.push(idx - 1);
+  if (c < GRID - 1) n.push(idx + 1);
+  return n;
+}
+
+function isSolvable() {
+  let inv = 0;
+  const flat = board.filter(n => n !== 0);
+  for (let i = 0; i < flat.length; i++)
+    for (let j = i + 1; j < flat.length; j++)
+      if (flat[i] > flat[j]) inv++;
+  if (GRID % 2 === 1) return inv % 2 === 0;
+  const emptyRow = GRID - 1 - Math.floor(board.indexOf(0) / GRID);
+  return (inv + emptyRow) % 2 === 1;
+}
+
+function isWin() {
+  const n = GRID * GRID;
+  for (let i = 0; i < n - 1; i++) if (board[i] !== i + 1) return false;
+  return board[n - 1] === 0;
+}
+
+// ─── Canvas Drawing ────────────────────────────────────────
+let previewMode = false;
+
+function drawPonyImage(px, py, pw, ph, pony, showNumber, tileNum, isEmpty) {
+  const { color, color2, color3, mane, eye, bg, accent } = pony;
+  const cx = px + pw / 2, cy = py + ph / 2;
+
+  if (isEmpty) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
+    ctx.strokeStyle = 'rgba(192,132,252,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
+    ctx.setLineDash([]);
+    return;
+  }
+
+  // Pony tile background gradient
+  const grad = ctx.createLinearGradient(px, py, px + pw, py + ph);
+  grad.addColorStop(0, color + 'dd');
+  grad.addColorStop(0.5, color2 + 'bb');
+  grad.addColorStop(1, color + 'aa');
+  ctx.fillStyle = grad;
+  ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
+
+  // Subtle grid texture
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (let i = 0; i < pw; i += 8) {
+    ctx.fillRect(px + 2 + i, py + 2, 1, ph - 4);
+  }
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
+
+  // Draw pony face/icon centered
+  const sz = Math.min(pw, ph) * 0.42;
+
+  // Face circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, sz, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Eyes
+  const eyeR = sz * 0.15;
+  const eyeY = cy - sz * 0.05;
+  const eyeLX = cx - sz * 0.3, eyeRX = cx + sz * 0.3;
+  // Eye whites
+  ctx.beginPath(); ctx.arc(eyeLX, eyeY, eyeR, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.beginPath(); ctx.arc(eyeRX, eyeY, eyeR, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+  // Pupils
+  ctx.beginPath(); ctx.arc(eyeLX, eyeY, eyeR * 0.6, 0, Math.PI*2); ctx.fillStyle = '#1a1a2a'; ctx.fill();
+  ctx.beginPath(); ctx.arc(eyeRX, eyeY, eyeR * 0.6, 0, Math.PI*2); ctx.fillStyle = '#1a1a2a'; ctx.fill();
+  // Eye shine
+  ctx.beginPath(); ctx.arc(eyeLX - eyeR*0.2, eyeY - eyeR*0.2, eyeR*0.25, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.beginPath(); ctx.arc(eyeRX - eyeR*0.2, eyeY - eyeR*0.2, eyeR*0.25, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+
+  // Mane (top of head)
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - sz * 0.6, sz * 0.35, sz * 0.3, 0, Math.PI, 0);
+  ctx.fillStyle = mane;
+  ctx.fill();
+
+  // Smile
+  ctx.beginPath();
+  ctx.arc(cx, cy + sz * 0.1, sz * 0.25, 0.1, Math.PI - 0.1);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Number overlay (if showing)
+  if (showNumber && tileNum > 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.roundRect(px + 4, py + 4, 22, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold 12px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText(tileNum, px + 15, py + 17);
+  }
+
+  // Star sparkle
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  drawStar(ctx, px + pw - 10, py + 10, 5, 4, 2);
+}
+
+function drawStar(ctx, cx, cy, outerR, innerR, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (i * Math.PI) / points - Math.PI / 2;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+    else ctx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function render() {
+  const pony = PONIES[ponyIndex];
+  cellW = CANVAS_SIZE / GRID;
+  cellH = CANVAS_SIZE / GRID;
+
+  ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  if (previewMode) {
+    // Show complete image
+    const n = GRID * GRID;
+    for (let i = 0; i < GRID; i++) {
+      for (let j = 0; j < GRID; j++) {
+        const idx = i * GRID + j;
+        if (idx === n - 1) continue; // skip empty slot visual
+        drawPonyImage(j * cellW, i * cellH, cellW, cellH, pony, true, idx === n - 1 ? n - 1 : idx + 1, false);
+      }
+    }
+    return;
+  }
+
+  // Draw tiles
+  for (let i = 0; i < board.length; i++) {
+    const val = board[i];
+    const r = Math.floor(i / GRID), c = i % GRID;
+    const px = c * cellW, py = r * cellH;
+    drawPonyImage(px, py, cellW, cellH, pony, true, val, val === 0);
+  }
+
+  // Gap between tiles
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
+  for (let i = 0; i <= GRID; i++) {
+    ctx.fillRect(0, i * cellH - 1, CANVAS_SIZE, 2);
+    ctx.fillRect(i * cellW - 1, 0, 2, CANVAS_SIZE);
+  }
+}
+
+// ─── Click / Touch ─────────────────────────────────────────
+function canvasCoord(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  return [Math.floor(x / cellW), Math.floor(y / cellH)];
+}
+
+canvas.addEventListener('click', (e) => {
+  if (solved) return;
+  const [c, r] = canvasCoord(e);
+  const idx = r * GRID + c;
+  const neighbors = getNeighbors(idx);
+  const emptyIdx = board.indexOf(0);
+  if (neighbors.includes(emptyIdx)) {
+    [board[idx], board[emptyIdx]] = [board[emptyIdx], board[idx]];
+    moves++;
+    document.getElementById('movesVal').textContent = moves;
+    render();
+    if (isWin()) onWin();
+  }
+});
+
+// ─── Win ───────────────────────────────────────────────────
+function onWin() {
+  solved = true;
+  clearInterval(timerInterval);
+  const score = Math.max(0, 1000 - moves * 2 - elapsed * 1);
+  document.getElementById('msg').innerHTML = `🎉 恭喜通关！得分 ${score}，用时 ${formatTime(elapsed)}，步数 ${moves}`;
+  document.getElementById('msg').className = 'msg win';
+  // Update best
+  if (bestScores[GRID] === null || score < bestScores[GRID]) {
+    bestScores[GRID] = score;
+    document.getElementById('bestVal').textContent = score + ' 分';
+  }
+}
+
+// ─── Solve Hint ─────────────────────────────────────────────
+function solveStep() {
+  // Find one correct position and swap with wrong one
+  for (let i = 0; i < board.length; i++) {
+    if (board[i] !== 0 && board[i] !== i + 1 && board[i] !== board.length) {
+      const correctIdx = board[i] - 1;
+      const emptyIdx = board.indexOf(0);
+      // Simple: find a misplaced tile and move it toward correct position
+      // Find current position of tile correctIdx+1
+      let tileIdx = board.indexOf(board[i]);
+      let emptyIdxCur = board.indexOf(0);
+      // Move tile to empty spot
+      [board[tileIdx], board[emptyIdxCur]] = [board[emptyIdxCur], board[tileIdx]];
+      render();
+      moves++;
+      document.getElementById('movesVal').textContent = moves;
+      if (isWin()) onWin();
+      return;
+    }
+  }
+}
+
+// ─── Timer ─────────────────────────────────────────────────
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${(s % 60).toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  elapsed = 0;
+  document.getElementById('timeVal').textContent = '0:00';
+  timerInterval = setInterval(() => {
+    elapsed++;
+    document.getElementById('timeVal').textContent = formatTime(elapsed);
+  }, 1000);
+}
+
+// ─── Controls ──────────────────────────────────────────────
+function setDiff(d) {
+  GRID = d;
+  solved = false;
+  previewMode = false;
+  document.getElementById('btn3').className = 'diff-btn' + (d===3?' active-3':'');
+  document.getElementById('btn4').className = 'diff-btn' + (d===4?' active-4':'');
+  document.getElementById('btn5').className = 'diff-btn' + (d===5?' active-5':'');
+  document.getElementById('bestVal').textContent = bestScores[d] !== null ? bestScores[d] + ' 分' : '—';
+  document.getElementById('msg').textContent = `点击滑动拼图，数字按顺序排列即可通关`;
+  document.getElementById('msg').className = 'msg';
+  newPuzzle();
+}
+
+function setPony(idx) {
+  ponyIndex = idx;
+  for (let i = 0; i < PONIES.length; i++) {
+    document.getElementById('tab' + i).className = 'pony-tab' + (i === idx ? ' active' : '');
+  }
+  solved = false;
+  previewMode = false;
+  document.getElementById('msg').textContent = `点击滑动拼图，数字按顺序排列即可通关`;
+  document.getElementById('msg').className = 'msg';
+  render();
+}
+
+function newPuzzle() {
+  solved = false;
+  previewMode = false;
+  document.getElementById('msg').textContent = `点击滑动拼图，数字按顺序排列即可通关`;
+  document.getElementById('msg').className = 'msg';
+  initBoard();
+  shuffleBoard();
+  render();
+  startTimer();
+}
+
+function previewImage() {
+  previewMode = !previewMode;
+  render();
+}
+
+// ─── Boot ─────────────────────────────────────────────────
+newPuzzle();
+</script>
+</body>
+</html>

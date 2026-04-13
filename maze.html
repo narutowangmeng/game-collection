@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>迷宫 Maze</title>
+<style>
+  :root {
+    --bg: #050508;
+    --surface: #0d0d14;
+    --wall: #1a1a2a;
+    --path: #08080e;
+    --text: #d8d8f0;
+    --muted: #44445a;
+    --accent: #9d6ff0;
+    --player: #00e5ff;
+    --goal: #ffd700;
+    --easy: #4ade80;
+    --med: #fbbf24;
+    --hard: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(157,111,240,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(0,229,255,0.04) 0%, transparent 50%);
+  }
+  .grid-bg { position: fixed; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.01) 1px, transparent 1px);
+    background-size: 40px 40px; }
+
+  .header { text-align: center; margin-bottom: 14px; position: relative; z-index: 1; }
+  .header h1 {
+    font-size: 2.6rem; font-weight: 900; letter-spacing: 6px; line-height: 1;
+    background: linear-gradient(135deg, var(--player), var(--accent), var(--goal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 6px;
+  }
+  .header p { color: var(--muted); font-size: 0.7rem; letter-spacing: 5px; text-transform: uppercase; }
+
+  .top-row { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; position: relative; z-index: 1; flex-wrap: wrap; justify-content: center; }
+  .diff-btn {
+    padding: 8px 22px;
+    border: 2px solid var(--muted);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; border-radius: 4px; transition: all 0.25s ease;
+  }
+  .diff-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .diff-btn.active-easy { border-color: var(--easy); color: var(--easy); background: rgba(74,222,128,0.08); box-shadow: 0 0 12px rgba(74,222,128,0.2); }
+  .diff-btn.active-med { border-color: var(--med); color: var(--med); background: rgba(251,191,36,0.08); box-shadow: 0 0 12px rgba(251,191,36,0.2); }
+  .diff-btn.active-hard { border-color: var(--hard); color: var(--hard); background: rgba(248,113,113,0.08); box-shadow: 0 0 12px rgba(248,113,113,0.2); }
+
+  .stats-bar { display: flex; gap: 28px; align-items: center; margin-bottom: 12px; position: relative; z-index: 1; }
+  .stat { text-align: center; }
+  .stat-lbl { font-size: 0.6rem; letter-spacing: 3px; color: var(--muted); margin-bottom: 2px; }
+  .stat-val { font-size: 1.5rem; font-weight: 900; color: var(--accent); }
+  .stat-val.timer { color: var(--player); font-variant-numeric: tabular-nums; }
+  .stat-val.level { color: var(--goal); }
+
+  .message {
+    font-size: 0.85rem; height: 22px; margin-bottom: 10px;
+    letter-spacing: 1px; position: relative; z-index: 1; transition: all 0.3s;
+  }
+  .message .win { color: var(--goal); font-weight: bold; font-size: 1rem; animation: glow 0.8s ease infinite alternate; }
+  @keyframes glow { from{text-shadow:0 0 8px rgba(255,215,0,0.5)} to{text-shadow:0 0 20px rgba(255,215,0,1)} }
+
+  #gameCanvas { display: block; border-radius: 8px; position: relative; z-index: 1; }
+
+  .hint { color: var(--muted); font-size: 0.65rem; letter-spacing: 2px; margin-top: 12px; text-align: center; position: relative; z-index: 1; }
+  .hint kbd {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 3px; color: var(--text);
+  }
+
+  .border-row { display: flex; gap: 12px; justify-content: center; margin-top: 10px; position: relative; z-index: 1; }
+  .btn {
+    padding: 9px 24px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; border-radius: 5px; transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+  }
+  .btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent); transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s ease; z-index: -1;
+  }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn:hover { color: #fff; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="header">
+  <h1>MAZE</h1>
+  <p>迷宫 &nbsp;·&nbsp; 等级挑战</p>
+</div>
+
+<div class="top-row">
+  <button class="diff-btn active-easy" id="btn-easy" onclick="setDiff('easy')">🟢 简单</button>
+  <button class="diff-btn" id="btn-med" onclick="setDiff('med')">🟡 中等</button>
+  <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">🔴 困难</button>
+</div>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-lbl">关卡</div><div class="stat-val level" id="levelVal">1</div></div>
+  <div class="stat"><div class="stat-lbl">步数</div><div class="stat-val" id="stepVal">0</div></div>
+  <div class="stat"><div class="stat-lbl">时间</div><div class="stat-val timer" id="timerVal">0:00</div></div>
+  <div class="stat"><div class="stat-lbl">最优</div><div class="stat-val" id="bestVal">—</div></div>
+</div>
+
+<div class="message" id="message">选择难度开始，按方向键/WASD 移动</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="hint">
+  移动：<kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+</div>
+
+<div class="border-row">
+  <button class="btn" onclick="restartLevel()">重玩本关</button>
+  <button class="btn" onclick="newMaze()">随机新迷宫</button>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────
+const DIFF = {
+  easy: { cols: 21, rows: 15, cell: 28, wallColor: '#1a1a2a', pathColor: '#08080e' },
+  med:  { cols: 31, rows: 21, cell: 22, wallColor: '#1a1a2a', pathColor: '#08080e' },
+  hard: { cols: 51, rows: 35, cell: 13, wallColor: '#1a1a2a', pathColor: '#07070c' },
+};
+
+const CELL = { wall: 0, path: 1, start: 2, end: 3 };
+
+let diff = 'easy';
+let cols, rows, cellSize;
+let maze = [];        // maze[row][col] = CELL type
+let player = { r: 0, c: 0 };
+let goal = { r: 0, c: 0 };
+let gameOver = false;
+let stepCount = 0;
+let timerInterval = null;
+let elapsed = 0;
+let level = 1;
+let bestTimes = { easy: null, med: null, hard: null };
+let animFrame = null;
+
+// ─── Canvas ───────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ─── Maze Generation: Recursive Backtracking ───────────────
+function generateMaze(c, r) {
+  const dr = [0, 1, 0, -1], dc = [1, 0, -1, 0];
+  // Shuffle directions
+  const order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  for (const i of order) {
+    const nr = r + dr[i] * 2, nc = c + dc[i] * 2;
+    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && maze[nr][nc] === CELL.wall) {
+      maze[r + dr[i]][c + dc[i]] = CELL.path;
+      maze[nr][nc] = CELL.path;
+      generateMaze(nc, nr);
+    }
+  }
+}
+
+function buildMaze() {
+  cols = DIFF[diff].cols;
+  rows = DIFF[diff].rows;
+  cellSize = DIFF[diff].cell;
+
+  canvas.width = cols * cellSize;
+  canvas.height = rows * cellSize;
+
+  // Fill all walls
+  maze = Array.from({length: rows}, () => Array(cols).fill(CELL.wall));
+
+  // Start from odd cell
+  const startR = 1, startC = 1;
+  maze[startR][startC] = CELL.path;
+  generateMaze(startC, startR);
+
+  // Entrance at top-left, Exit at bottom-right
+  maze[0][0] = CELL.start;
+  maze[0][1] = CELL.path;
+  maze[rows-1][cols-1] = CELL.end;
+  maze[rows-2][cols-1] = CELL.path;
+  maze[rows-1][cols-2] = CELL.path;
+
+  player = { r: 0, c: 0 };
+  goal = { r: rows - 1, c: cols - 1 };
+}
+
+// ─── Draw ───────────────────────────────────────────────────
+let pulse = 0;
+function draw() {
+  pulse += 0.03;
+  const cfg = DIFF[diff];
+
+  ctx.fillStyle = cfg.pathColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const wallH = cellSize / 2;
+  const wallPad = 1;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = c * cellSize, y = r * cellSize;
+      const val = maze[r][c];
+
+      if (val === CELL.wall) {
+        // Gradient wall
+        const grad = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+        grad.addColorStop(0, '#1e1e30');
+        grad.addColorStop(1, '#14141e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x + wallPad, y + wallPad, cellSize - wallPad*2, cellSize - wallPad*2);
+        // subtle edge
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x + wallPad, y + wallPad, cellSize - wallPad*2, cellSize - wallPad*2);
+      } else if (val === CELL.start) {
+        ctx.fillStyle = cfg.pathColor;
+        ctx.fillRect(x, y, cellSize, cellSize);
+        ctx.fillStyle = 'rgba(0,229,255,0.15)';
+        ctx.fillRect(x, y, cellSize, cellSize);
+      } else if (val === CELL.end) {
+        const glow = 0.5 + 0.5 * Math.sin(pulse);
+        ctx.fillStyle = cfg.pathColor;
+        ctx.fillRect(x, y, cellSize, cellSize);
+        // Gold glow
+        const rad = ctx.createRadialGradient(
+          x + cellSize/2, y + cellSize/2, 0,
+          x + cellSize/2, y + cellSize/2, cellSize * 0.8
+        );
+        rad.addColorStop(0, `rgba(255,215,0,${0.4 + glow * 0.4})`);
+        rad.addColorStop(1, 'rgba(255,215,0,0)');
+        ctx.fillStyle = rad;
+        ctx.fillRect(x, y, cellSize, cellSize);
+        // Star marker
+        ctx.fillStyle = `rgba(255,215,0,${0.8 + glow * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(x + cellSize/2, y + cellSize/2, cellSize * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Player
+  const px = player.c * cellSize, py = player.r * cellSize;
+  const pr = cellSize * 0.32;
+  const pGlow = ctx.createRadialGradient(px+cellSize/2, py+cellSize/2, 0, px+cellSize/2, py+cellSize/2, pr*2);
+  pGlow.addColorStop(0, 'rgba(0,229,255,0.4)');
+  pGlow.addColorStop(1, 'rgba(0,229,255,0)');
+  ctx.fillStyle = pGlow;
+  ctx.fillRect(px, py, cellSize, cellSize);
+  ctx.fillStyle = '#00e5ff';
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(px + cellSize/2, py + cellSize/2, pr, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Inner highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  ctx.arc(px + cellSize/2 - pr*0.25, py + cellSize/2 - pr*0.25, pr*0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  animFrame = requestAnimationFrame(draw);
+}
+
+// ─── Input ──────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (gameOver) return;
+  let dr = 0, dc = 0;
+  switch (e.key) {
+    case 'ArrowUp': case 'w': case 'W': dr = -1; break;
+    case 'ArrowDown': case 's': case 'S': dr = 1; break;
+    case 'ArrowLeft': case 'a': case 'A': dc = -1; break;
+    case 'ArrowRight': case 'd': case 'D': dc = 1; break;
+    default: return;
+  }
+  e.preventDefault();
+  movePlayer(dr, dc);
+});
+
+function movePlayer(dr, dc) {
+  const nr = player.r + dr, nc = player.c + dc;
+  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return;
+  if (maze[nr][nc] === CELL.wall) return;
+
+  player.r = nr;
+  player.c = nc;
+  stepCount++;
+  document.getElementById('stepVal').textContent = stepCount;
+
+  if (nr === goal.r && nc === goal.c) {
+    winLevel();
+  }
+}
+
+function winLevel() {
+  gameOver = true;
+  clearInterval(timerInterval);
+
+  const timeStr = formatTime(elapsed);
+  document.getElementById('message').innerHTML =
+    `<span class="win">🎉 第 ${level} 关完成！用时 ${timeStr}，步数 ${stepCount}</span>`;
+
+  // Update best
+  if (bestTimes[diff] === null || elapsed < bestTimes[diff]) {
+    bestTimes[diff] = elapsed;
+    document.getElementById('bestVal').textContent = timeStr;
+  }
+
+  // Auto advance after 2s
+  setTimeout(() => {
+    level++;
+    document.getElementById('levelVal').textContent = level;
+    startLevel();
+  }, 2200);
+}
+
+function startLevel() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  buildMaze();
+  resetTimer();
+  gameOver = false;
+  stepCount = 0;
+  document.getElementById('stepVal').textContent = '0';
+  document.getElementById('message').textContent = `第 ${level} 关 · ${diffLabel(diff)} · 找到出口！`;
+  draw();
+}
+
+function newMaze() {
+  level++;
+  document.getElementById('levelVal').textContent = level;
+  startLevel();
+}
+
+function restartLevel() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  resetTimer();
+  gameOver = false;
+  stepCount = 0;
+  document.getElementById('stepVal').textContent = '0';
+  player = { r: 0, c: 0 };
+  document.getElementById('message').textContent = `第 ${level} 关 · ${diffLabel(diff)} · 重新开始！`;
+  draw();
+}
+
+// ─── Timer ──────────────────────────────────────────────────
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  elapsed = 0;
+  document.getElementById('timerVal').textContent = '0:00';
+  timerInterval = setInterval(() => {
+    elapsed++;
+    document.getElementById('timerVal').textContent = formatTime(elapsed);
+  }, 1000);
+}
+
+// ─── Difficulty ─────────────────────────────────────────────
+function diffLabel(d) {
+  return { easy: '简单', med: '中等', hard: '困难' }[d];
+}
+
+function setDiff(d) {
+  diff = d;
+  level = 1;
+  document.getElementById('levelVal').textContent = '1';
+  document.getElementById('btn-easy').className = 'diff-btn' + (d==='easy'?' active-easy':'');
+  document.getElementById('btn-med').className  = 'diff-btn' + (d==='med' ?' active-med':'');
+  document.getElementById('btn-hard').className = 'diff-btn' + (d==='hard'?' active-hard':'');
+  document.getElementById('bestVal').textContent = bestTimes[d] !== null ? formatTime(bestTimes[d]) : '—';
+  startLevel();
+}
+
+// ─── Boot ───────────────────────────────────────────────────
+startLevel();
+</script>
+</body>
+</html>

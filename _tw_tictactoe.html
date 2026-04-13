@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>井字棋 Tic-Tac-Toe</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --grid-line: #2a2a3a;
+    --x-color: #ff6b6b;
+    --o-color: #4ecdc4;
+    --text: #e8e8f0;
+    --muted: #555570;
+    --accent: #6c5ce7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(108,92,231,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(78,205,196,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .header { text-align: center; margin-bottom: 48px; position: relative; z-index: 1; }
+  .header h1 {
+    font-size: 2.8rem;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--x-color), var(--accent), var(--o-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .header p { color: var(--muted); font-size: 0.85rem; letter-spacing: 4px; text-transform: uppercase; }
+
+  .status {
+    font-size: 1.1rem;
+    margin-bottom: 36px;
+    height: 28px;
+    letter-spacing: 1px;
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
+  }
+  .status .x { color: var(--x-color); font-weight: bold; }
+  .status .o { color: var(--o-color); font-weight: bold; }
+  .status .win { color: var(--accent); font-weight: bold; font-size: 1.3rem; animation: pulse 0.6s ease infinite alternate; }
+
+  @keyframes pulse {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .cell {
+    width: 110px;
+    height: 110px;
+    background: var(--surface);
+    border: 2px solid var(--grid-line);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.2rem;
+    font-weight: 900;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .cell:hover:not(.taken):not(.gameover) {
+    background: #1e1e2a;
+    border-color: var(--accent);
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(108,92,231,0.3);
+  }
+  .cell.taken { cursor: default; }
+  .cell.gameover { cursor: default; }
+  .cell.winner-cell {
+    background: #1a1a2a;
+    border-color: var(--accent);
+    box-shadow: 0 0 30px rgba(108,92,231,0.5);
+    animation: win-glow 1s ease infinite alternate;
+  }
+  @keyframes win-glow {
+    from { box-shadow: 0 0 20px rgba(108,92,231,0.4); }
+    to { box-shadow: 0 0 40px rgba(108,92,231,0.8); }
+  }
+  .cell .mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pop-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes pop-in {
+    from { transform: scale(0) rotate(-180deg); opacity: 0; }
+    to { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  .cell .x-mark { color: var(--x-color); text-shadow: 0 0 20px rgba(255,107,107,0.6); }
+  .cell .o-mark { color: var(--o-color); text-shadow: 0 0 20px rgba(78,205,196,0.6); }
+
+  .btn {
+    margin-top: 40px;
+    padding: 12px 36px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+    z-index: -1;
+  }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn:hover { color: #fff; }
+
+  .scoreboard {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 36px;
+    position: relative;
+    z-index: 1;
+  }
+  .score-item { text-align: center; }
+  .score-label { font-size: 0.7rem; letter-spacing: 3px; color: var(--muted); margin-bottom: 4px; }
+  .score-value { font-size: 2rem; font-weight: 900; }
+  .score-value.x { color: var(--x-color); }
+  .score-value.o { color: var(--o-color); }
+  .score-value.d { color: var(--muted); }
+
+  .draw-line {
+    position: absolute;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    height: 4px;
+    border-radius: 2px;
+    transform-origin: left center;
+    animation: line-appear 0.4s ease forwards;
+    pointer-events: none;
+  }
+  @keyframes line-appear {
+    from { transform: scaleX(0); opacity: 0; }
+    to { transform: scaleX(1); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="header">
+  <h1>TIC TAC TOE</h1>
+  <p>井字棋 &nbsp;·&nbsp; 赞比亚国家队训练</p>
+</div>
+
+<div class="scoreboard">
+  <div class="score-item"><div class="score-label">X PLAYER</div><div class="score-value x" id="scoreX">0</div></div>
+  <div class="score-item"><div class="score-label">DRAWS</div><div class="score-value d" id="scoreD">0</div></div>
+  <div class="score-item"><div class="score-label">O PLAYER</div><div class="score-value o" id="scoreO">0</div></div>
+</div>
+
+<div class="status" id="status"><span class="o">O</span> 的回合</div>
+
+<div class="board" id="board"></div>
+
+<button class="btn" onclick="resetGame()">重新开始</button>
+
+<script>
+const board = document.getElementById('board');
+const status = document.getElementById('status');
+const WIN_PATTERNS = [
+  [0,1,2],[3,4,5],[6,7,8],
+  [0,3,6],[1,4,7],[2,5,8],
+  [0,4,8],[2,4,6]
+];
+let cells = [], current = 'X', gameOver = false, scores = {X:0, O:0, D:0};
+
+function init() {
+  board.innerHTML = '';
+  cells = []; current = 'X'; gameOver = false;
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.i = i;
+    cell.onclick = () => handleClick(i);
+    board.appendChild(cell);
+    cells.push({el: cell, val: ''});
+  }
+  updateStatus();
+}
+
+function handleClick(i) {
+  if (gameOver || cells[i].val) return;
+  cells[i].val = current;
+  cells[i].el.classList.add('taken');
+  const mark = document.createElement('span');
+  mark.className = 'mark ' + (current === 'X' ? 'x-mark' : 'o-mark');
+  mark.textContent = current;
+  cells[i].el.appendChild(mark);
+
+  const win = checkWin();
+  if (win) {
+    gameOver = true;
+    scores[current]++;
+    updateScores();
+    win.forEach(idx => cells[idx].el.classList.add('winner-cell'));
+    status.innerHTML = `<span class="win">${current} 赢了！</span>`;
+    cells.forEach(c => c.el.classList.add('gameover'));
+    return;
+  }
+  if (cells.every(c => c.val)) {
+    gameOver = true;
+    scores.D++;
+    updateScores();
+    status.innerHTML = `<span class="win">平局！</span>`;
+    cells.forEach(c => c.el.classList.add('gameover'));
+    return;
+  }
+  current = current === 'X' ? 'O' : 'X';
+  updateStatus();
+}
+
+function checkWin() {
+  for (const pat of WIN_PATTERNS) {
+    const [a,b,c] = pat;
+    if (cells[a].val && cells[a].val === cells[b].val && cells[a].val === cells[c].val)
+      return pat;
+  }
+  return null;
+}
+
+function updateStatus() {
+  status.innerHTML = current === 'X'
+    ? `<span class="x">X</span> 的回合`
+    : `<span class="o">O</span> 的回合`;
+}
+
+function updateScores() {
+  document.getElementById('scoreX').textContent = scores.X;
+  document.getElementById('scoreO').textContent = scores.O;
+  document.getElementById('scoreD').textContent = scores.D;
+}
+
+function resetGame() { init(); }
+
+init();
+</script>
+</body>
+</html>
