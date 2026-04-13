@@ -43,13 +43,18 @@
   .status.lose { color: #f87171; }
   @keyframes glow { from{text-shadow:0 0 6px rgba(251,191,36,0.4)} to{text-shadow:0 0 18px rgba(251,191,36,0.9)} }
 
-  #board-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 6px; }
+  #board-wrap { 
+  flex: 1; display: flex; align-items: center; justify-content: center; 
+  padding: 6px; max-width: 100%; overflow: hidden; 
+}
   #board {
     background: #b89040;
     border: 3px solid #907030;
     box-shadow: 0 6px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,220,100,0.1);
     cursor: pointer; touch-action: none;
     position: relative;
+    max-width: 95vw;
+    max-height: 70vh;
   }
 
   .controls {
@@ -109,7 +114,8 @@ let lastMove = null;
 
 function adaptSize() {
   const maxW = Math.min(window.innerWidth - 16, 480);
-  const sz = Math.floor(maxW / BOARD) * BOARD;
+  const maxH = window.innerHeight - 180;
+  const sz = Math.floor(Math.min(maxW, maxH) / BOARD) * BOARD;
   CELL = Math.floor(sz / BOARD);
   boardEl.style.width = sz + 'px';
   boardEl.style.height = sz + 'px';

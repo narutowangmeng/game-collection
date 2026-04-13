@@ -218,6 +218,7 @@ function renderBoard() {
         el.dataset.r = r;
         el.dataset.c = c;
         el.addEventListener('click', onTileClick);
+        el.addEventListener('touchstart', onTileClick, { passive: true });
       } else {
         el.className = 'tile empty';
       }
