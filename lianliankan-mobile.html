@@ -325,14 +325,25 @@ function canConnect(r1, c1, r2, c2) {
   const onEdge1 = r1 === 0 || r1 === ROWS - 1 || c1 === 0 || c1 === COLS - 1;
   const onEdge2 = r2 === 0 || r2 === ROWS - 1 || c2 === 0 || c2 === COLS - 1;
   
-  // Direct horizontal (same row)
-  if (r1 === r2 && clearH(r1, c1, c2)) return true;
-  // Direct vertical (same column)
-  if (c1 === c2 && clearV(r1, r2, c1)) return true;
+  // Direct horizontal (same row) - check if can go through edge
+  if (r1 === r2) {
+    // Direct path or edge path
+    if (clearH(r1, c1, c2)) return true;
+  }
+  
+  // Direct vertical (same column) - check if can go through edge
+  if (c1 === c2) {
+    if (clearV(r1, r2, c1)) return true;
+  }
 
-  // One turn: corner (L-shape)
-  if (tiles[r1][c2] === null && clearH(r1, c1, c2) && clearV(r1, r2, c2)) return true;
-  if (tiles[r2][c1] === null && clearV(r1, r2, c1) && clearH(r2, c1, c2)) return true;
+  // One turn: corner (L-shape) - also check edge paths
+  // Corner at (r1, c2): go horizontal from c1 to c2 (c2 can be edge or outside), then vertical
+  const c2Valid = c2 < 0 || c2 >= COLS || tiles[r1][c2] === null;
+  if (c2Valid && clearH(r1, c1, c2) && clearV(r1, r2, c2)) return true;
+  
+  // Corner at (r2, c1): go vertical from r1 to r2 (r2 can be edge or outside), then horizontal
+  const r2Valid = r2 < 0 || r2 >= ROWS || tiles[r2][c1] === null;
+  if (r2Valid && clearV(r1, r2, c1) && clearH(r2, c1, c2)) return true;
 
   // Two turns: scan all rows (including virtual edge rows -1 and ROWS)
   for (let rc = -1; rc <= ROWS; rc++) {
