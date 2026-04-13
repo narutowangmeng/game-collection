@@ -319,38 +319,64 @@ function flashNoMatch(el1, el2) {
   }, 300);
 }
 
-// ─── Path finding: max 2 turns ───────────────────────────
+// ─── Path finding: max 2 turns, including edge paths ───────────────────────────
 function canConnect(r1, c1, r2, c2) {
-  // Direct horizontal
+  // Check if either tile is on edge (can connect through outside)
+  const onEdge1 = r1 === 0 || r1 === ROWS - 1 || c1 === 0 || c1 === COLS - 1;
+  const onEdge2 = r2 === 0 || r2 === ROWS - 1 || c2 === 0 || c2 === COLS - 1;
+  
+  // Direct horizontal (same row)
   if (r1 === r2 && clearH(r1, c1, c2)) return true;
-  // Direct vertical
+  // Direct vertical (same column)
   if (c1 === c2 && clearV(r1, r2, c1)) return true;
 
-  // One turn: corner
+  // One turn: corner (L-shape)
   if (tiles[r1][c2] === null && clearH(r1, c1, c2) && clearV(r1, r2, c2)) return true;
   if (tiles[r2][c1] === null && clearV(r1, r2, c1) && clearH(r2, c1, c2)) return true;
 
-  // Two turns: scan all rows
-  for (let rc = 0; rc < ROWS; rc++) {
+  // Two turns: scan all rows (including virtual edge rows -1 and ROWS)
+  for (let rc = -1; rc <= ROWS; rc++) {
     if (rc === r1 || rc === r2) continue;
-    if (tiles[rc][c1] === null && tiles[rc][c2] === null &&
-        clearV(r1, rc, c1) && clearH(rc, c1, c2) && clearV(rc, r2, c2)) return true;
+    // Check if we can go through this row (must be empty or edge)
+    const rowClear = (rc < 0 || rc >= ROWS || tiles[rc][c1] === null) && 
+                     (rc < 0 || rc >= ROWS || tiles[rc][c2] === null);
+    if (!rowClear) continue;
+    
+    const v1Clear = rc < 0 || rc >= ROWS || clearV(r1, rc, c1);
+    const hClear = rc < 0 || rc >= ROWS || (clearH(rc, c1, c2));
+    const v2Clear = rc < 0 || rc >= ROWS || clearV(rc, r2, c2);
+    
+    if (v1Clear && hClear && v2Clear) return true;
   }
-  // Two turns: scan all cols
-  for (let cc = 0; cc < COLS; cc++) {
+  
+  // Two turns: scan all columns (including virtual edge cols -1 and COLS)
+  for (let cc = -1; cc <= COLS; cc++) {
     if (cc === c1 || cc === c2) continue;
-    if (tiles[r1][cc] === null && tiles[r2][cc] === null &&
-        clearH(r1, c1, cc) && clearV(r1, r2, cc) && clearH(r2, cc, c2)) return true;
+    // Check if we can go through this column (must be empty or edge)
+    const colClear = (cc < 0 || cc >= COLS || tiles[r1][cc] === null) && 
+                     (cc < 0 || cc >= COLS || tiles[r2][cc] === null);
+    if (!colClear) continue;
+    
+    const h1Clear = cc < 0 || cc >= COLS || clearH(r1, c1, cc);
+    const vClear = cc < 0 || cc >= COLS || (clearV(r1, r2, cc));
+    const h2Clear = cc < 0 || cc >= COLS || clearH(r2, cc, c2);
+    
+    if (h1Clear && vClear && h2Clear) return true;
   }
+  
   return false;
 }
 
 function clearH(r, c1, c2) {
+  // If r is outside the board, it's always clear (virtual edge path)
+  if (r < 0 || r >= ROWS) return true;
   const lo = Math.min(c1, c2), hi = Math.max(c1, c2);
   for (let c = lo + 1; c < hi; c++) if (tiles[r][c] !== null) return false;
   return true;
 }
 function clearV(r1, r2, c) {
+  // If c is outside the board, it's always clear (virtual edge path)
+  if (c < 0 || c >= COLS) return true;
   const lo = Math.min(r1, r2), hi = Math.max(r1, r2);
   for (let r = lo + 1; r < hi; r++) if (tiles[r][c] !== null) return false;
   return true;
